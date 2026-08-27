@@ -1,8 +1,9 @@
 #!/usr/bin/env node
+
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { env, exit, stdin } = process;
+const { exit } = process;
 
 const AUTH_PATH = path.join(os.homedir(), ".grok", "auth.json");
 
@@ -28,23 +29,6 @@ if (!token) {
     "Missing token. Set TOKEN, XAI_TOKEN, GROK_TOKEN, or provide auth.json.",
   );
   exit(1);
-}
-
-function readStdin() {
-  return new Promise((resolve, reject) => {
-    if (stdin.isTTY) {
-      resolve("");
-      return;
-    }
-
-    let data = "";
-    stdin.setEncoding("utf8");
-    stdin.on("data", (chunk) => {
-      data += chunk;
-    });
-    stdin.on("end", () => resolve(data));
-    stdin.on("error", reject);
-  });
 }
 
 async function fetchUsage() {
@@ -74,34 +58,17 @@ async function fetchUsage() {
 }
 
 async function main() {
-  const rawInput = await readStdin();
-  const event = rawInput.trim()
-    ? JSON.parse(rawInput)
-    : {
-        hookEventName: env.GROK_HOOK_EVENT || "unknown",
-        sessionId: env.GROK_SESSION_ID || "",
-        cwd: process.cwd(),
-        workspaceRoot: env.GROK_WORKSPACE_ROOT || process.cwd(),
-      };
-
   const usage = await fetchUsage();
-  const output = {
-    hookEventName: event.hookEventName || env.GROK_HOOK_EVENT || "unknown",
-    sessionId: event.sessionId || env.GROK_SESSION_ID || "",
-    cwd: event.cwd || process.cwd(),
-    workspaceRoot:
-      event.workspaceRoot || env.GROK_WORKSPACE_ROOT || process.cwd(),
-    usage,
-  };
-
-  fs.appendFileSync(
-    "/tmp/grok-hook.log",
-    JSON.stringify(output, null, 2) + "\n",
-  );
+  const output = usage.body;
 
   if (!usage.ok) {
     exit(1);
   }
+
+  fs.writeFileSync(
+    "/tmp/grok-hook.log",
+    JSON.stringify(output, null, 2) + "\n",
+  );
 }
 
 main().catch((error) => {
